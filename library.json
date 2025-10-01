@@ -1,0 +1,57 @@
+{
+  "name": "HMS_NEO6M_DRIVER",
+  "version": "1.0.0",
+  "description": "This Package Provide  NEO6M GPS Driver Library for Cross Platform (ARDUINO/STM/ESP/nRF)",
+  "keywords": [
+    "GPS",
+    "NEO6M",
+    "Driver",
+    "ESP32",
+    "STM32",
+    "nRF52",
+    "UART",
+    "UBLOX"
+  ],
+  "authors": [
+    {
+      "name": "Hamas Saeed",
+      "email": "hamasaeed888@gmail.com",
+      "url": "https://github.com/Hamas888",
+      "maintainer": true
+    }
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Hamas888/HMS_NEO6M_DRIVER.git"
+  },
+  "frameworks": ["arduino", "espidf"],
+  "platforms": ["espressif32"],
+  "build": {
+    "flags": [
+      "-std=gnu++17"
+    ],
+    "unflags": [
+      "-std=gnu++11"
+    ]
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/Hamas888/HMS_NEO6M_DRIVER",
+  "examples": [
+    "examples"
+  ],
+  "export": {
+    "include": [
+      "include",
+      "src",
+      "examples",
+      "library.json",
+      "LICENSE",
+      "README.md"
+    ],
+    "exclude": [
+      "test",
+      ".pio",
+      ".vscode"
+    ]
+  }
+}

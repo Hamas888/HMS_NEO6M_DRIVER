@@ -1,0 +1,3 @@
+version: 1.0.0
+description: "A NEO6M Driver Library for ESP-IDF"
+url: "https://github.com/Hamas888/HMS_NEO6M_DRIVER"
