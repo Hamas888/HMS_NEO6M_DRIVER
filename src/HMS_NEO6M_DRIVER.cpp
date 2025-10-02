@@ -6,9 +6,9 @@
 #endif
 
 HMS_NEO6M::HMS_NEO6M() : payload{0}, respBuffer{0}, checksum{0}, isAwake(true), isInitialized(false) {
-    maxRetries = 5;
-    retryInterval = 2; // seconds
-
+    maxRetries      = HMS_NEO6M_DEFAULT_MAX_RETRIES;
+    retryInterval   = HMS_NEO6M_DEFAULT_RETRY_INTERVAL;
+    geofenceRadius  = HMS_NEO6M_GEOFENCE_RADIUS_DEFAULT;
 }
 
 HMS_NEO6M::~HMS_NEO6M() {
@@ -399,7 +399,7 @@ HMS_NEO6M_Status HMS_NEO6M::fetchCoordinates() {
 
 HMS_NEO6M_Status HMS_NEO6M::fetchNaveMetaInfo() {
     if(initCheck() != HMS_NEO6M_OK) return HMS_NEO6M_ERROR;
-    
+
     payload[0] = HMS_NEO6M_UBX_SYNC_CHAR_1;
     payload[1] = HMS_NEO6M_UBX_SYNC_CHAR_2;
     payload[2] = HMS_NEO6M_UBX_CLASS_NAV;
@@ -512,6 +512,20 @@ void HMS_NEO6M::parseCoordinates(const uint8_t* buffer) {
             navData.latitude, navData.longitude, navData.altitude, navData.heightAboveSeaLevel, navData.horizontalAccuracy, navData.verticalAccuracy
         );
     #endif
+
+    if(location.latitude == 0.0f && location.longitude == 0.0f) {
+        location.latitude = navData.latitude / 1e7f;
+        location.longitude = navData.longitude / 1e7f;
+        location.lastLatitude = location.latitude;
+        location.lastLongitude = location.longitude;
+    } else {
+        location.lastLatitude = location.latitude;
+        location.lastLongitude = location.longitude;
+        location.latitude = navData.latitude / 1e7f;
+        location.longitude = navData.longitude / 1e7f;
+    }
+    
+    updateGeofenceStatus();
 }
 
 void HMS_NEO6M::parseNaveMetaInfo(const uint8_t* buffer) {
@@ -597,4 +611,51 @@ void HMS_NEO6M::gpsCheck(const uint8_t* buffer, uint8_t msgClass, uint8_t msgId,
             neo6mLogger.debug("GPS not Detected: Invalid response");
         #endif
     }
+}
+
+void HMS_NEO6M::updateGeofenceStatus() {
+    if (location.lastLatitude != 0.0f && location.lastLongitude != 0.0f) {
+        location.inGeofence = isWithinGeofence(
+            location.latitude, location.longitude,
+            location.lastLatitude, location.lastLongitude,
+            geofenceRadius
+        );
+        
+        #if defined(HMS_NEO6M_LOGGER_ENABLED)
+            float distance = calculateDistance(
+                location.latitude, location.longitude,
+                location.lastLatitude, location.lastLongitude
+            );
+            neo6mLogger.debug("Geofence Status: %s, Distance from last: %.2f m", 
+                location.inGeofence ? "INSIDE" : "OUTSIDE", distance);
+        #endif
+    }
+}
+
+float HMS_NEO6M::calculateDistance(float lat1, float lon1, float lat2, float lon2) {
+    // Haversine formula for calculating distance between two coordinates
+    const float EARTH_RADIUS = 6371000.0f; // Earth radius in meters
+    
+    // Convert degrees to radians
+    float lat1_rad = lat1 * M_PI / 180.0f;
+    float lon1_rad = lon1 * M_PI / 180.0f;
+    float lat2_rad = lat2 * M_PI / 180.0f;
+    float lon2_rad = lon2 * M_PI / 180.0f;
+    
+    // Calculate differences
+    float dlat = lat2_rad - lat1_rad;
+    float dlon = lon2_rad - lon1_rad;
+    
+    // Haversine formula
+    float a = sin(dlat/2) * sin(dlat/2) + 
+              cos(lat1_rad) * cos(lat2_rad) * 
+              sin(dlon/2) * sin(dlon/2);
+    float c = 2 * atan2(sqrt(a), sqrt(1-a));
+    
+    return EARTH_RADIUS * c;
+}
+
+bool HMS_NEO6M::isWithinGeofence(float lat, float lon, float centerLat, float centerLon, float radiusMeters) {
+    float distance = calculateDistance(lat, lon, centerLat, centerLon);
+    return distance <= radiusMeters;
 }

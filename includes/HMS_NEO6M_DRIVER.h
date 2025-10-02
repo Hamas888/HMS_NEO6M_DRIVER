@@ -53,9 +53,17 @@
 
 #if defined(HMS_NEO6M_PLATFORM_ARDUINO)
     #include <Arduino.h>
+    #include <math.h>
 #elif defined(HMS_NEO6M_PLATFORM_ESP_IDF)
+    #include <math.h>
+    #include <stdio.h>
+    #include <stdint.h>
+    #include <string.h>
 #elif defined(HMS_NEO6M_PLATFORM_ZEPHYR)
     #include <stdio.h>
+    #include <math.h>
+    #include <stdint.h>
+    #include <string.h>
     #include <zephyr/device.h>
     #include <zephyr/drivers/i2c.h>
 #elif defined(HMS_NEO6M_PLATFORM_STM32_HAL)
@@ -63,12 +71,16 @@
     #include <math.h>
     #include <stdio.h>
     #include <stdint.h>
+    #include <string.h>
     #if defined(osCMSIS) || defined(FREERTOS)
         #define CHRONOLOG_STM32_FREERTOS
     #endif
 #endif
 
-#endif // HMS_NEO6M_DRIVER_H
+// Define M_PI if not defined
+#ifndef M_PI
+    #define M_PI 3.14159265358979323846
+#endif
 
 #include "HMS_NEO6M_Config.h"
 
@@ -174,14 +186,18 @@ class HMS_NEO6M {
         HMS_NEO6M_Status fetchCoordinates();
         HMS_NEO6M_Status fetchNaveMetaInfo();
 
-        void setMaxRetries(uint8_t retries)             { maxRetries = retries;     }
-        void setRetryInterval(uint8_t interval)         { retryInterval = interval; }
+        void setMaxRetries(uint8_t value)               { maxRetries = value;    }
+        void setRetryInterval(uint8_t value)            { retryInterval = value; }
+        void setGeofenceRadius(uint8_t value)           { geofenceRadius = value; }
+        void setGeofenceCenter(float lat, float lon)    { location.lastLatitude = lat; location.lastLongitude = lon; }
 
-        HMS_NEO6M_Time getTimeUTC() const               { return timeData;          }
-        HMS_NEO6M_FixType getFixType() const            { return fixType;           }
-        HMS_NEO6M_NAV_Data getNavData() const           { return navData;           }
-        HMS_NEO6M_Location getLocation() const          { return location;          }
-        HMS_NEO6M_NAV_MetaInfo getNavMetaInfo() const   { return navMetaInfo;       }
+        HMS_NEO6M_Time getTimeUTC() const               { return timeData;       }
+        HMS_NEO6M_FixType getFixType() const            { return fixType;        }
+        HMS_NEO6M_NAV_Data getNavData() const           { return navData;        }
+        HMS_NEO6M_Location getLocation() const          { return location;       }
+        HMS_NEO6M_NAV_MetaInfo getNavMetaInfo() const   { return navMetaInfo;    }
+        uint8_t getGeofenceRadius() const               { return geofenceRadius; }
+        bool isInGeofence() const                       { return location.inGeofence; }
 
     private:
         #if defined(HMS_NEO6M_PLATFORM_ARDUINO)
@@ -195,6 +211,7 @@ class HMS_NEO6M {
         #endif
         bool                    isAwake;
         bool                    isInitialized;
+        uint8_t                 geofenceRadius;
         uint8_t                 maxRetries;
         uint8_t                 retryInterval;
         uint8_t                 payload[HMS_NEO6M_UBX_PAYLOAD_SIZE];
@@ -219,4 +236,10 @@ class HMS_NEO6M {
         void makeChecksum(uint8_t *msg, uint8_t length);
         void logHex(const uint8_t *data, uint8_t length);
         void gpsCheck(const uint8_t* buffer, uint8_t msgClass, uint8_t msgId,uint16_t len);
+        
+        void updateGeofenceStatus();
+        float calculateDistance(float lat1, float lon1, float lat2, float lon2);
+        bool isWithinGeofence(float lat, float lon, float centerLat, float centerLon, float radiusMeters);
 };
+
+#endif // HMS_NEO6M_DRIVER_H

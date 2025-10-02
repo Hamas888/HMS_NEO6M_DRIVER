@@ -81,4 +81,9 @@
 #define HMS_NEO6M_RESPONSE_TIMEOUT        1200
 #define HMS_NEO6M_UBX_CHECKSUM_SIZE       2
 
+#define HMS_NEO6M_DEFAULT_MAX_RETRIES     5                             // Default maximum number of retries for operations
+#define HMS_NEO6M_DEFAULT_RETRY_INTERVAL  2                             // Default retry interval in seconds
+
+#define HMS_NEO6M_GEOFENCE_RADIUS_DEFAULT 100                          // Default geofence radius in meters
+
 #endif // HMS_NEO6M_CONFIG_H
