@@ -5,7 +5,9 @@
     ChronoLogger neo6mLogger("HMS_NEO6M", CHRONOLOG_LEVEL_DEBUG);
 #endif
 
-HMS_NEO6M::HMS_NEO6M() : payload{0}, respBuffer{0}, checksum{0} {
+HMS_NEO6M::HMS_NEO6M() : payload{0}, respBuffer{0}, checksum{0}, isAwake(true), isInitialized(false) {
+    maxRetries = 5;
+    retryInterval = 2; // seconds
 
 }
 
@@ -21,18 +23,54 @@ HMS_NEO6M::~HMS_NEO6M() {
     void sendUBXMessage(const uint8_t *msg, uint8_t len) {
         // Send UBX message via serial
     }
+    
+    HMS_NEO6M_Status HMS_NEO6M::sendUBXMessage(const uint8_t *msg, uint8_t len) {
+        // Implement UART write logic for Zephyr
+        return HMS_NEO6M_OK;
+    }
+        
+    HMS_NEO6M_Status HMS_NEO6M::receiveUBXResponse(uint8_t *respBuffer, uint8_t &respLen, uint32_t timeout) {
+        // Implement UART read logic for Zephyr
+        return HMS_NEO6M_OK;    
+    }
 #elif defined(HMS_NEO6M_PLATFORM_ESP_IDF)
     HMS_NEO6M_Status HMS_NEO6M::begin(Serial &serial, uint32_t baudrate = 115200) {
         return HMS_NEO6M_OK;
+    }
+    
+    HMS_NEO6M_Status HMS_NEO6M::sendUBXMessage(const uint8_t *msg, uint8_t len) {
+        // Implement UART write logic for Zephyr
+        return HMS_NEO6M_OK;
+    }
+        
+    HMS_NEO6M_Status HMS_NEO6M::receiveUBXResponse(uint8_t *respBuffer, uint8_t &respLen, uint32_t timeout) {
+        // Implement UART read logic for Zephyr
+        return HMS_NEO6M_OK;    
     }
 #elif defined(HMS_NEO6M_PLATFORM_ZEPHYR)
     HMS_NEO6M_Status HMS_NEO6M::begin(const struct device *uart, uint32_t baudrate = 115200) {
         // Initialize UART with the specified baudrate
         return HMS_NEO6M_OK;
     }
+
+    HMS_NEO6M_Status HMS_NEO6M::sendUBXMessage(const uint8_t *msg, uint8_t len) {
+        // Implement UART write logic for Zephyr
+        return HMS_NEO6M_OK;
+    }
+
+    HMS_NEO6M_Status HMS_NEO6M::receiveUBXResponse(uint8_t *respBuffer, uint8_t &respLen, uint32_t timeout) {
+        // Implement UART read logic for Zephyr
+        return HMS_NEO6M_OK;    
+    }
 #elif defined(HMS_NEO6M_PLATFORM_STM32_HAL)
     HMS_NEO6M_Status HMS_NEO6M::begin(UART_HandleTypeDef *huart, uint32_t baudrate = 115200) {
         neo6mUart = huart;
+        if(neo6mUart == nullptr) {
+            #if defined(HMS_NEO6M_LOGGER_ENABLED)
+                neo6mLogger.logError("Invalid UART handle");
+            #endif
+            return HMS_NEO6M_ERROR;
+        }
         neo6mUart->Init.BaudRate = baudrate;
         HAL_UART_Init(neo6mUart);
         neo6mDelay(10000);
@@ -50,7 +88,7 @@ HMS_NEO6M::~HMS_NEO6M() {
                 logHex(respBuffer, respLen);
                 neo6mLogger.debug("Received UBX response of length %d", respLen);
             #endif
-            gps.parse(gps.respBuffer, gps.respLen);
+            parseResponse(respBuffer, respLen);
         } else {
             #if defined(HMS_NEO6M_LOGGER_ENABLED)
                 neo6mLogger.logError("No UBX response received");
@@ -84,6 +122,15 @@ HMS_NEO6M::~HMS_NEO6M() {
     }
 #endif
 
+HMS_NEO6M_Status HMS_NEO6M::initCheck() {
+    if(!isInitialized && !isAwake) {
+        #if defined(HMS_NEO6M_LOGGER_ENABLED)
+            neo6mLogger.logError("Module not initialized or awake");
+        #endif
+        return HMS_NEO6M_ERROR;
+    }
+    return HMS_NEO6M_OK;
+}
 
 HMS_NEO6M_Status HMS_NEO6M::init() {
     if(configureUART() != HMS_NEO6M_OK) {
@@ -121,10 +168,13 @@ HMS_NEO6M_Status HMS_NEO6M::init() {
         return HMS_NEO6M_ERROR;
     }
 
+    isInitialized = true;
     return HMS_NEO6M_OK;
 }
 
 HMS_NEO6M_Status HMS_NEO6M::reset() {
+    if(initCheck() != HMS_NEO6M_OK) return HMS_NEO6M_ERROR;
+    
     memset(payload, 0, sizeof(payload));
     payload[0] = HMS_NEO6M_UBX_SYNC_CHAR_1;
     payload[1] = HMS_NEO6M_UBX_SYNC_CHAR_2;
@@ -180,6 +230,8 @@ HMS_NEO6M_Status HMS_NEO6M::getFix() {
 }
 
 HMS_NEO6M_Status HMS_NEO6M::wakeup() {
+    if(!isInitialized) return HMS_NEO6M_ERROR;
+
     memset(payload, 0, sizeof(payload));
     payload[0] = HMS_NEO6M_UBX_SYNC_CHAR_1;
     payload[1] = HMS_NEO6M_UBX_SYNC_CHAR_2;
@@ -207,9 +259,18 @@ HMS_NEO6M_Status HMS_NEO6M::wakeup() {
         #endif
         return HMS_NEO6M_ERROR;
     }
+
+    #if defined(HMS_NEO6M_LOGGER_ENABLED)
+        neo6mLogger.debug("NEO6M is now awake");
+    #endif
+
+    isAwake = true;
+    return HMS_NEO6M_OK;
 }
 
 HMS_NEO6M_Status HMS_NEO6M::putToSleep() {
+    if(initCheck() != HMS_NEO6M_OK) return HMS_NEO6M_ERROR;
+
     memset(payload, 0, sizeof(payload));
     payload[0] = HMS_NEO6M_UBX_SYNC_CHAR_1;
     payload[1] = HMS_NEO6M_UBX_SYNC_CHAR_2;
@@ -240,10 +301,13 @@ HMS_NEO6M_Status HMS_NEO6M::putToSleep() {
     #if defined(HMS_NEO6M_LOGGER_ENABLED)
         neo6mLogger.debug("NEO6M is now in sleep mode");
     #endif
+    isAwake = false;
     return HMS_NEO6M_OK;
 }
 
 HMS_NEO6M_Status HMS_NEO6M::configureUART() {
+    if(initCheck() != HMS_NEO6M_OK) return HMS_NEO6M_ERROR;
+
     memset(payload, 0, sizeof(payload));
     payload[0] = HMS_NEO6M_UBX_SYNC_CHAR_1;
     payload[1] = HMS_NEO6M_UBX_SYNC_CHAR_2;
@@ -286,6 +350,8 @@ HMS_NEO6M_Status HMS_NEO6M::configureUART() {
 }
 
 HMS_NEO6M_Status HMS_NEO6M::fetchTimeEUTCC() {
+    if(initCheck() != HMS_NEO6M_OK) return HMS_NEO6M_ERROR;
+
     memset(payload, 0, sizeof(payload));
     payload[0] = HMS_NEO6M_UBX_SYNC_CHAR_1;
     payload[1] = HMS_NEO6M_UBX_SYNC_CHAR_2;
@@ -308,6 +374,8 @@ HMS_NEO6M_Status HMS_NEO6M::fetchTimeEUTCC() {
 }
 
 HMS_NEO6M_Status HMS_NEO6M::fetchCoordinates() {
+    if(initCheck() != HMS_NEO6M_OK) return HMS_NEO6M_ERROR;
+
     memset(payload, 0, sizeof(payload));
     payload[0] = HMS_NEO6M_UBX_SYNC_CHAR_1;
     payload[1] = HMS_NEO6M_UBX_SYNC_CHAR_2;
@@ -330,6 +398,8 @@ HMS_NEO6M_Status HMS_NEO6M::fetchCoordinates() {
 }
 
 HMS_NEO6M_Status HMS_NEO6M::fetchNaveMetaInfo() {
+    if(initCheck() != HMS_NEO6M_OK) return HMS_NEO6M_ERROR;
+    
     payload[0] = HMS_NEO6M_UBX_SYNC_CHAR_1;
     payload[1] = HMS_NEO6M_UBX_SYNC_CHAR_2;
     payload[2] = HMS_NEO6M_UBX_CLASS_NAV;

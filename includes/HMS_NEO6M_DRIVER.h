@@ -148,6 +148,7 @@ typedef struct {
     uint32_t         timeofFractional;
 } HMS_NEO6M_NAV_MetaInfo;
 
+
 class HMS_NEO6M {
     public:
         HMS_NEO6M();
@@ -163,6 +164,16 @@ class HMS_NEO6M {
             HMS_NEO6M_Status begin(UART_HandleTypeDef *huart, uint32_t baudrate = 115200);
         #endif
 
+        HMS_NEO6M_Status reset();
+        HMS_NEO6M_Status getFix();
+        HMS_NEO6M_Status wakeup();
+        HMS_NEO6M_Status initCheck();
+        HMS_NEO6M_Status putToSleep();
+        HMS_NEO6M_Status configureUART();
+        HMS_NEO6M_Status fetchTimeEUTCC();
+        HMS_NEO6M_Status fetchCoordinates();
+        HMS_NEO6M_Status fetchNaveMetaInfo();
+
         void setMaxRetries(uint8_t retries)             { maxRetries = retries;     }
         void setRetryInterval(uint8_t interval)         { retryInterval = interval; }
 
@@ -174,14 +185,16 @@ class HMS_NEO6M {
 
     private:
         #if defined(HMS_NEO6M_PLATFORM_ARDUINO)
-            Stream *neo6mSerial;
+            Stream *neo6mSerial = nullptr;
         #elif defined(HMS_NEO6M_PLATFORM_ESP_IDF)
-            Serial *neo6mSerial;
+            Serial *neo6mSerial = nullptr;
         #elif defined(HMS_NEO6M_PLATFORM_ZEPHYR)
-            const struct device *neo6mDevice;
+            const struct device *neo6mDevice = nullptr;
         #elif defined(HMS_NEO6M_PLATFORM_STM32_HAL)
-            UART_HandleTypeDef *neo6mUart;
+            UART_HandleTypeDef *neo6mUart = nullptr;
         #endif
+        bool                    isAwake;
+        bool                    isInitialized;
         uint8_t                 maxRetries;
         uint8_t                 retryInterval;
         uint8_t                 payload[HMS_NEO6M_UBX_PAYLOAD_SIZE];
@@ -195,14 +208,6 @@ class HMS_NEO6M {
         HMS_NEO6M_NAV_MetaInfo  navMetaInfo;
 
         HMS_NEO6M_Status init();
-        HMS_NEO6M_Status reset();
-        HMS_NEO6M_Status getFix();
-        HMS_NEO6M_Status wakeup();
-        HMS_NEO6M_Status putToSleep();
-        HMS_NEO6M_Status configureUART();
-        HMS_NEO6M_Status fetchTimeEUTCC();
-        HMS_NEO6M_Status fetchCoordinates();
-        HMS_NEO6M_Status fetchNaveMetaInfo();
         HMS_NEO6M_Status sendUBXMessage(const uint8_t *msg, uint8_t len);
         HMS_NEO6M_Status parseResponse(const uint8_t *buffer, uint8_t len);
         HMS_NEO6M_Status receiveUBXResponse(uint8_t *respBuffer, uint8_t &respLen, uint32_t timeout);
